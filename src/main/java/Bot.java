@@ -1,3 +1,7 @@
+import com.github.kwhat.jnativehook.GlobalScreen;
+import com.github.kwhat.jnativehook.NativeHookException;
+import com.github.kwhat.jnativehook.dispatcher.VoidDispatchService;
+import com.github.kwhat.jnativehook.keyboard.NativeKeyListener;
 import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
@@ -27,11 +31,12 @@ import java.sql.Array;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class Bot extends ListenerAdapter {
+public class Bot extends ListenerAdapter implements NativeKeyListener {
 
     public static int creeps = 0;
 
-    public static final long BAD_MEME_COOLDOWN = 10*60*1000;
+    public static final long BAD_MEME_COOLDOWN = 10 * 60 * 1000;
+    private static final boolean PRINT_TIME = true;
 
     private final String[] leaveKeywords = {"leave", "stop", "go away", "get out of here", "i hate you"};
     private final String[] whoWroteKeywords = {"who is creep by", "who made creep", "who wrote creep"};
@@ -39,6 +44,9 @@ public class Bot extends ListenerAdapter {
 
     private Set<String> matches;
     private List<String> keywords;
+
+    private ShortcutListener shortcutListener;
+    private MessageChannel activeChannel;
 
     private AudioPlayerManager APM;
     private AudioPlayer AP;
@@ -48,22 +56,40 @@ public class Bot extends ListenerAdapter {
     private AudioTrack theCreep;
     private AudioTrack notCreep;
 
+    private long lastBadMeme = 0;
+
     private List<String> whoWroteCreep;
     private List<Pair<String, String>> restartingCreep;
 
     public static void main(String[] args) throws LoginException {
-        if(args.length == 0) {
+        if (args.length == 0) {
             System.out.println("give me TOKEN!!!");
             System.exit(1);
         }
 
         //JDA builder
+        Bot bot = new Bot();
+
         JDABuilder.create(args[0], GatewayIntent.GUILD_MESSAGES, GatewayIntent.DIRECT_MESSAGES, GatewayIntent.GUILD_MEMBERS, GatewayIntent.GUILD_VOICE_STATES)
                 .disableCache(CacheFlag.ACTIVITY, CacheFlag.EMOTE, CacheFlag.CLIENT_STATUS, CacheFlag.ONLINE_STATUS)
                 .enableCache(CacheFlag.VOICE_STATE)
-                .addEventListeners(new Bot())
+                .addEventListeners(bot)
                 .setActivity(Activity.listening("Creep"))
                 .build();
+
+        // ADD KEYPRESS LISTENER
+        try {
+            GlobalScreen.registerNativeHook();
+        }
+        catch (NativeHookException ex) {
+            System.err.println("There was a problem registering the native hook.");
+            System.err.println(ex.getMessage());
+
+            System.exit(1);
+        }
+
+
+        GlobalScreen.addNativeKeyListener(bot.getShortcutListener());
     }
 
     public Bot() {
@@ -72,7 +98,7 @@ public class Bot extends ListenerAdapter {
         InputStream is = Bot.class.getClassLoader().getResourceAsStream("matchlist.txt");
         new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))
                 .lines()
-                .filter(s -> !s.substring(0,2).equals("//"))
+                .filter(s -> !s.startsWith("//"))
                 .map(s -> s.toLowerCase(Locale.ROOT))
                 .forEach(matches::add);
 
@@ -82,7 +108,7 @@ public class Bot extends ListenerAdapter {
 
         new BufferedReader(new InputStreamReader(kis, StandardCharsets.UTF_8))
                 .lines()
-                .filter(s -> !s.substring(0,2).equals("//"))
+                .filter(s -> !s.startsWith("//"))
                 .map(s -> s.toLowerCase(Locale.ROOT))
                 .forEach(keywords::add);
 
@@ -90,6 +116,9 @@ public class Bot extends ListenerAdapter {
         for(String str : keywords) {
             System.out.println(str);
         }
+
+        shortcutListener = new ShortcutListener(getActiveChannel());
+        activeChannel = null;
 
         //register lavaplayer stuff
         APM = new DefaultAudioPlayerManager();
@@ -156,8 +185,8 @@ public class Bot extends ListenerAdapter {
             }
         });
 
-        // responses for who wrote creep
         // hardcoding is awesome
+        // responses for who wrote creep
         whoWroteCreep = new ArrayList<>();
         whoWroteCreep.add("idk");
         whoWroteCreep.add("somebody");
@@ -174,12 +203,16 @@ public class Bot extends ListenerAdapter {
             restartingCreep.add(Pair.of("!CREEPNUM", ""));
     }
 
+
+
     @Override
     public void onMessageReceived(@NotNull MessageReceivedEvent event) {
         Message msg = event.getMessage();
         String msgTxt = msg.getContentRaw().toLowerCase(Locale.ROOT);
         boolean msgMatches = false;
         String matched = "";
+
+        System.out.println("TIME: " + System.currentTimeMillis());
         if(matches.contains(msgTxt)) { //matchlist match
             msgMatches = true;
             matched = msgTxt;
@@ -196,6 +229,7 @@ public class Bot extends ListenerAdapter {
             }
         }
         MessageChannel channel = event.getChannel();
+        shortcutListener.setChannel(channel);
         trackScheduler.setChannel(channel);
 
         if(msgTxt.startsWith("go away creep")
@@ -245,6 +279,10 @@ public class Bot extends ListenerAdapter {
             AP.stopTrack();
             trackScheduler.play();
             channel.sendMessage("playing creep again").queue();
+            return;
+        } else if(msgTxt.contains("stop creep") || msgTxt.contains("stop weirdo")) {
+            channel.sendMessage("no").queue();
+            return;
         } else if(msgTxt.startsWith("run mcafee antivirus")) {
             AP.stopTrack();
             while(!trackScheduler.getQueue().isEmpty()) {
@@ -296,10 +334,15 @@ public class Bot extends ListenerAdapter {
             trackScheduler.debug();
 
             if(msgTxt.equals("free 123 punjabi movie")) {
-                System.out.println(":O");
-
+                System.out.println("--bad meme called--");
+                if((System.currentTimeMillis() >= (lastBadMeme + BAD_MEME_COOLDOWN)) || (lastBadMeme == 0) ) { //cooldown has passed
+                    lastBadMeme = System.currentTimeMillis();
+                } else {
+                    channel.sendMessage("L + ratio").queue(); //cooldown active, can't use joke
+                    return;
+                }
                 //shitposting
-                channel.sendMessage("[**CRITICAL ERROR**] /--MALWARE DETECTED--/\n i am indian and let me tell you, being indian is actually a great thing. we have beautiful people and we have ugly people. just like any race. I for 1 am a great person, have great friends, and i take care of every one that is in my life and i am glad to do it, and for that i have people that love me around me. also, indian parents are one of the best parents you can have. sometimes they can be really strict, but they will take care of you no matter what, and they will buy you what ever it is that you need. as long as your not a selfish ****head. Also, we all have great jobs, lots of money and a family that we all love and take care off. suck my dick op suck my dick.").queue();
+                channel.sendMessage("[**CRITICAL ERROR**] /--MALWARE DETECTED--/\ni am indian and let me tell you, being indian is actually a great thing. we have beautiful people and we have ugly people. just like any race. I for 1 am a great person, have great friends, and i take care of every one that is in my life and i am glad to do it, and for that i have people that love me around me. also, indian parents are one of the best parents you can have. sometimes they can be really strict, but they will take care of you no matter what, and they will buy you what ever it is that you need. as long as your not a selfish ****head. Also, we all have great jobs, lots of money and a family that we all love and take care off. suck my dick op suck my dick.").queue();
 
                 AP.stopTrack();
                 AP.playTrack(notCreep.makeClone());
@@ -319,6 +362,14 @@ public class Bot extends ListenerAdapter {
 
         }
 
+    }
+
+    public MessageChannel getActiveChannel() {
+        return activeChannel;
+    }
+
+    public ShortcutListener getShortcutListener() {
+        return shortcutListener;
     }
 
     private boolean validateMsg(String str, String[]... validsArrs) {

@@ -40,12 +40,12 @@ public class TrackScheduler extends AudioEventAdapter {
             // Start next track
             play();
             if(channel != null) {
-                if(Bot.creeps > 0 && Bot.creeps % 5 == 0) {
-                    channel.sendMessage("creep milestone " + (Bot.creeps / 5) + " reached.").queue();
-                } else {
-                    channel.sendMessage("creep again anyone?").queue();
-                }
                 Bot.creeps++;
+                if((Bot.creeps > 0) && (Bot.creeps % 5 == 0)) {
+                    channel.sendMessage("creep **milestone " + (Bot.creeps / 5) + "** reached.").queue();
+                } else {
+                    channel.sendMessage("creep again anyone? (" + Bot.creeps + ")").queue();
+                }
             }
         }
 
