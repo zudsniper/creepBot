@@ -103,6 +103,6 @@ public class TrackScheduler extends AudioEventAdapter {
     }
 
     public void debug() {
-        System.out.println("next in queue: " + queue.peek().getInfo().title);
+        //System.out.println("next in queue: " + queue.peek().getInfo().title);
     }
 }

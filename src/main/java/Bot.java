@@ -42,24 +42,24 @@ public class Bot extends ListenerAdapter implements NativeKeyListener {
     private final String[] whoWroteKeywords = {"who is creep by", "who made creep", "who wrote creep"};
     private final String[] startOverKeywords = {"restart", "start over", "again"};
 
-    private Set<String> matches;
-    private List<String> keywords;
+    private final Set<String> matches;
+    private final List<String> keywords;
 
-    private ShortcutListener shortcutListener;
-    private MessageChannel activeChannel;
+    private final ShortcutListener shortcutListener;
+    private final MessageChannel activeChannel;
 
-    private AudioPlayerManager APM;
-    private AudioPlayer AP;
-    private TrackScheduler trackScheduler;
-    private AudioPlayerSendHandler APSH;
+    private final AudioPlayerManager APM;
+    private final AudioPlayer AP;
+    private final TrackScheduler trackScheduler;
+    private final AudioPlayerSendHandler APSH;
 
     private AudioTrack theCreep;
     private AudioTrack notCreep;
 
     private long lastBadMeme = 0;
 
-    private List<String> whoWroteCreep;
-    private List<Pair<String, String>> restartingCreep;
+    private final List<String> whoWroteCreep;
+    private final List<Pair<String, String>> restartingCreep;
 
     public static void main(String[] args) throws LoginException {
         if (args.length == 0) {
@@ -96,6 +96,7 @@ public class Bot extends ListenerAdapter implements NativeKeyListener {
         //Load matchlist (message must match whole phrase)
         matches = new HashSet<>();
         InputStream is = Bot.class.getClassLoader().getResourceAsStream("matchlist.txt");
+        assert is != null;
         new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))
                 .lines()
                 .filter(s -> !s.startsWith("//"))
@@ -106,6 +107,7 @@ public class Bot extends ListenerAdapter implements NativeKeyListener {
         keywords = new ArrayList<>();
         InputStream kis = Bot.class.getClassLoader().getResourceAsStream("keywords.txt");
 
+        assert kis != null;
         new BufferedReader(new InputStreamReader(kis, StandardCharsets.UTF_8))
                 .lines()
                 .filter(s -> !s.startsWith("//"))
@@ -237,7 +239,7 @@ public class Bot extends ListenerAdapter implements NativeKeyListener {
                 || msgTxt.startsWith("leave creep")
                 || msgTxt.startsWith("leave weirdo")) {
             // Gets the channel in which the bot is currently connected.
-            AudioChannel connectedChannel = event.getGuild().getSelfMember().getVoiceState().getChannel();
+            AudioChannel connectedChannel = Objects.requireNonNull(event.getGuild().getSelfMember().getVoiceState()).getChannel();
             // Checks if the bot is connected to a voice channel.
             if(connectedChannel == null) {
                 channel.sendMessage(";-; i'm not even creeping right now!").queue();
@@ -308,7 +310,7 @@ public class Bot extends ListenerAdapter implements NativeKeyListener {
                 return;
             }
 
-            GuildVoiceState vs = event.getMember().getVoiceState();
+            GuildVoiceState vs = Objects.requireNonNull(event.getMember()).getVoiceState();
             if(vs == null) {
                 channel.sendMessage("yo'eredont even have a voice state...?>?? what the crap...").queue();
                 return;
